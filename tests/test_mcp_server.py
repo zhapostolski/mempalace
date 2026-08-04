@@ -396,8 +396,14 @@ class TestColdStartDiagnostics:
     def test_eager_warmup_query_failure_logs_and_persists_to_log_file(self, tmp_path):
         """Query may raise (broken HNSW, network failure during ONNX download,
         runtime decoder error). Server stays up and the diagnostic lands in
-        both stderr AND ``MEMPALACE_LOG_FILE`` — the latter is the whole
-        point of #1495 for ops debugging the original -32000."""
+        ``MEMPALACE_LOG_FILE`` — the whole point of #1495 for ops debugging
+        the original -32000.
+
+        LOCAL DEVIATION: upstream also asserts the diagnostic on stderr. This
+        install deliberately attaches ONLY the file handler when
+        MEMPALACE_LOG_FILE is set, because mcp-proxy / mcp-go does not drain
+        the subprocess stderr pipe and a 64KB fill deadlocks mempalace. So we
+        assert the file receives it and stderr stays quiet."""
         palace = self._make_fake_palace(tmp_path)
         log_path = tmp_path / "mcp.log"
         extra = (
@@ -416,14 +422,14 @@ class TestColdStartDiagnostics:
             extra_code=extra,
         )
         assert result.returncode == 0, f"stderr={result.stderr!r}"
-        assert "warmup query failed" in result.stderr, result.stderr
-        assert "synthetic-query-fail-1495" in result.stderr, result.stderr
-        assert f"palace={palace}" in result.stderr, result.stderr
-        assert "error=RuntimeError" in result.stderr, result.stderr
+        # LOCAL DEVIATION: stderr is intentionally NOT used when a log file is set.
+        assert "warmup query failed" not in result.stderr, result.stderr
         assert log_path.exists(), f"log file not created; stderr={result.stderr!r}"
         body = log_path.read_text(encoding="utf-8")
         assert "warmup query failed" in body, body
         assert "synthetic-query-fail-1495" in body, body
+        assert f"palace={palace}" in body, body
+        assert "error=RuntimeError" in body, body
 
     def test_log_file_path_with_embedded_newline_does_not_crash(self, tmp_path):
         """``MEMPALACE_LOG_FILE`` containing a newline (rare misconfig from

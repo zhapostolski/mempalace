@@ -305,7 +305,7 @@ def _hybrid_rank(
     scored.sort(
         key=lambda pair: (
             pair[0],
-            pair[1].get("authored_at") or pair[1].get("metadata", {}).get("authored_at") or "",
+            pair[1].get("authored_at") or (pair[1].get("metadata") or {}).get("authored_at") or "",
         ),
         reverse=True,
     )
