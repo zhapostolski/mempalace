@@ -185,9 +185,14 @@ def _init_logging() -> None:
     # MEMPALACE_LOG_FILE is operator-supplied and opt-in; this is a
     # local-first server (CLAUDE.md design principle), so no path
     # sanitization — the operator's process UID is the trust boundary.
+    # When a log file is configured we write ONLY to the file, not stderr.
+    # This prevents the stderr pipe buffer (64KB on Linux) from filling up
+    # when mcp-proxy / mcp-go doesn't drain the subprocess stderr — a known
+    # upstream bug (mark3labs/mcp-go) that causes mempalace to deadlock.
     log_file = os.environ.get("MEMPALACE_LOG_FILE", "").strip()
     file_handler: logging.Handler | None = None
     file_handler_error: Exception | None = None
+    handlers: list[logging.Handler] = []
     if log_file:
         try:
             file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
@@ -213,10 +218,16 @@ def _init_logging() -> None:
         if file_handler is not None:
             root.addHandler(file_handler)
     else:
-        # Standalone server: own the unconfigured root logger as before.
-        handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
+        # Standalone server: own the unconfigured root logger.
+        # LOCAL DEVIATION (kept across the v3.6.0 rebase): when a log file is
+        # configured we attach ONLY the file handler and deliberately omit
+        # stderr. mcp-proxy / mcp-go does not drain the subprocess stderr pipe,
+        # so a 64KB buffer fill deadlocks mempalace. Upstream always appends a
+        # StreamHandler here, which reintroduces that hang.
         if file_handler is not None:
             handlers.append(file_handler)
+        else:
+            handlers.append(logging.StreamHandler(sys.stderr))
         logging.basicConfig(level=logging.INFO, format="%(message)s", handlers=handlers)
 
     if file_handler_error is not None:

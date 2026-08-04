@@ -45,14 +45,6 @@ else
   fi
 fi
 
-# Pre-warm ChromaDB in background so the first Stop hook doesn't cold-start
-"$MEMPAL_PYTHON" -c "
-import os, sys
-sys.path.insert(0, os.environ.get('PYTHONPATH','').split(':')[0])
-try:
-    from mempalace.backends.chroma import ChromaBackend
-    b = ChromaBackend()
-    b.get_collection(os.path.expanduser('~/.mempalace/palace'), 'mempalace_drawers', create=False)
-except Exception:
-    pass
-" >/dev/null 2>&1 &
+# (Removed ChromaDB pre-warm: palace is on the pgvector backend now. Instantiating
+# ChromaBackend here recreated chroma.sqlite3 + migration flag-files in the palace dir,
+# causing a "multiple backend artifacts" mismatch. No chroma to warm on pgvector.)
